@@ -9,7 +9,7 @@ Basic extension from [goja](https://github.com/dop251/goja) library.
 - default JSON storage
 
 ```bash
-go get github.com/nitsugaro/go-jsruntime@latest
+go get github.com/nitsugaro/go-jsruntime@v1.0.1
 ```
 
 ## Usage

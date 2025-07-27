@@ -8,18 +8,18 @@ import (
 
 type IScriptStorage interface {
 	GetSourceCode(name string, typ string) (string, error)
-	OnChange(callback func(name, code string))
+	OnChange(callback func(script *Script))
 }
 
 type ScriptStorage struct {
 	*nstore.NStorage[*Script]
 
-	callbacks []func(name, code string)
+	callbacks []func(script *Script)
 }
 
-func (ss *ScriptStorage) OnChange(callback func(name, code string)) {
+func (ss *ScriptStorage) OnChange(callback func(script *Script)) {
 	if ss.callbacks == nil {
-		ss.callbacks = []func(name, code string){}
+		ss.callbacks = []func(script *Script){}
 	}
 
 	ss.callbacks = append(ss.callbacks, callback)
@@ -40,9 +40,7 @@ func (ss *ScriptStorage) Save(script *Script) error {
 	}
 
 	for _, cb := range ss.callbacks {
-		if code, err := script.GetRawCode(); err != nil {
-			cb(script.Name, code)
-		}
+		cb(script)
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package jsrun
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dop251/goja"
@@ -18,8 +19,19 @@ func NewScriptManager(storage IScriptStorage) *ScriptManager {
 		storage: storage,
 	}
 
-	sm.storage.OnChange(func(name, code string) {
-		sm.mustCompileScript(name, code)
+	sm.storage.OnChange(func(script *Script) {
+		code, err := script.GetRawCode()
+		if err != nil {
+			fmt.Printf("unable to get raw code: %s", err.Error())
+			return
+		}
+
+		if script.Type == "library" {
+			//wrapper
+			code = fmt.Sprintf("(function(exports, module) { %s\n})", code)
+		}
+
+		sm.mustCompileScript(script.Name, code)
 	})
 
 	return sm
@@ -70,7 +82,9 @@ func (sm *ScriptManager) ExecuteWithBindings(program *goja.Program, bindings map
 
 	val, err := vm.RunProgram(program)
 
-	go scriptCallbacks.executeCallbacks()
+	if len(scriptCallbacks.callbacks) != 0 {
+		go scriptCallbacks.executeCallbacks()
+	}
 
 	return val, err
 }

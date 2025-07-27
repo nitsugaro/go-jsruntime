@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
-	"time"
 
 	jsrun "github.com/nitsugaro/go-jsruntime"
 	"github.com/nitsugaro/go-utils/encoding"
@@ -31,12 +31,7 @@ var asyncFunc = &jsrun.Script{
 	Name: "http-async",
 	Type: "async",
 	CodeBase64: encoding.EncodeBase64([]byte(`
-		if(typeof async !== "undefined") {
-			logger("calling async again!")
-			async("http-async", { logger, http })
-		}
-
-		person.hi()
+		logger("wtf")
 
 		logger("executing request")
 		http()
@@ -93,41 +88,56 @@ var mainScript = `
 			throw new Error()
 		}
 
-		const limit = 10
+		const limit = 3000
 		function loop() {
 			for(let i = 0; i < limit; i++) logger(i)
 		}
 
 		const myPerson = new Person()
 
-		executeAsync("http-async", { logger, http, async: executeAsync, person: myPerson })
-		executeAsync("http-async", { logger, http, person:myPerson })
-
-		callbacks.Add(1)
+		//executeAsync("http-async", { logger, http })
 		
 		loop()
 		myPerson.hi()
+
+		logger(library1.getLocalVariable())
 		library1.getLocalVariable()
 	`
 
 func TestMain(t *testing.T) {
-	var scriptManager, scriptStorage = jsrun.NewDefaultStorage("scripts")
-
+	// Script setup
+	scriptManager, scriptStorage := jsrun.NewDefaultStorage("scripts")
+	scriptStorage.OnChange(func(script *jsrun.Script) {})
 	scriptStorage.Save(asyncFunc)
 	scriptStorage.Save(library1)
 	scriptStorage.Save(library2)
 
 	prog, _ := scriptManager.CompileScript("main", mainScript)
-	val, err := scriptManager.ExecuteWithBindings(prog, map[string]interface{}{"logger": Logger, "http": testHTTPRequest})
-	if err != nil {
-		t.Error(err.Error())
+
+	const n = 100
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			fmt.Println("execution", i)
+
+			val, err := scriptManager.ExecuteWithBindings(prog, map[string]interface{}{
+				"logger": Logger,
+				"http":   testHTTPRequest,
+			})
+			if err != nil {
+				t.Errorf("Error: %v", err)
+				return
+			}
+			if val.ToNumber().ToInteger() != 2 {
+				t.Errorf("val must be equal to 2")
+			}
+		}(i)
 	}
 
-	if val.ToNumber().ToInteger() != 2 {
-		t.Errorf("val must be equal to 2")
-	}
-
-	time.Sleep(10 * time.Second)
+	wg.Wait() // Esperamos que todos terminen
 
 	os.RemoveAll("scripts")
 }

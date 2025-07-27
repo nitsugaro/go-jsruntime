@@ -16,28 +16,10 @@ func (sm *ScriptManager) requireFunc(vm *goja.Runtime, bindings map[string]inter
 		sm.mu.RLock()
 		cached, ok := sm.scripts[moduleName]
 		sm.mu.RUnlock()
-
 		if !ok {
-			code, err := sm.storage.GetSourceCode(moduleName, "library")
-			if err != nil {
-				panic(vm.ToValue(vm.NewGoError(fmt.Errorf("module %q not found", moduleName))))
-			}
-
-			wrapped := fmt.Sprintf("(function(exports, module) { %s\n})", code)
-
-			prog, err := sm.mustCompileScript(moduleName, wrapped)
-			if err != nil {
-				panic(vm.ToValue(vm.NewGoError(fmt.Errorf("error compiling module %q: %w", moduleName, err))))
-			}
-
-			sm.mu.Lock()
-			sm.scripts[moduleName] = prog
-			sm.mu.Unlock()
-
-			cached = prog
+			panic(vm.ToValue(vm.NewGoError(fmt.Errorf("module %q not found", moduleName))))
 		}
 
-		vm := goja.New()
 		for k, v := range bindings {
 			vm.Set(k, v)
 		}
@@ -50,6 +32,9 @@ func (sm *ScriptManager) requireFunc(vm *goja.Runtime, bindings map[string]inter
 		exports := vm.NewObject()
 		module := vm.NewObject()
 		module.Set("exports", exports)
+
+		vm.Set("module", module)
+		vm.Set("exports", exports)
 
 		fnVal, err := vm.RunProgram(cached)
 		if err != nil {
